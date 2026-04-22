@@ -1,0 +1,14 @@
+--docker image oluşturur--
+docker build -t churn-app .
+
+--docker container oluşturur ve işin bitince siler--
+docker run --rm -p 8000:8000 -p 8501:8501 churn-app
+
+
+# üstteki iki adımı yapmak yeterlidir.
+
+--localde API hizmetinin çalışıp çalışmadığını SwaggerUI ile kontrol etmene yarar--
+uvicorn app:app --host 0.0.0.0 --port 8000
+
+--streamlit arayüzünü lokalden test etmeni sağlar--
+streamlit run dashboard.py
