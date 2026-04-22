@@ -1,62 +1,80 @@
-import pandas as pd     #Veriyi dataframe haline getirip manipüle etmek için
-import joblib           #.pkl dosyalarını açmak için 
-import json             #columns.json dosyasını liste formatında okumak için
-import os               # Bilgisayarımdaki klasör yollarını akıllıca yönetmek için
+import pandas as pd
+import joblib
+import json
+import os
 
 class PredictionService:
     def __init__(self):
-        # Dosya yolları belirlendi
-        base_path = os.path.dirname(os.path.abspath(__file__))      #os.path.abspath(__file__) şuan çalıştığım dosya hangisi diye bakar
-        model_dir = os.path.join(base_path, '..', 'models')         # '..' bir üst klasöre çık demek. src içindeyken bir üst klasöre çıkıp models klasörüne gidiyoruz.
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        model_dir = os.path.join(base_path, '..', 'models')
 
-        print(f"--- Modelleri burada arıyorum: {os.path.abspath(model_dir)}")
-        print(f"--- Klasördeki dosyalar: {os.listdir(model_dir)}")
-
-
-        # Kaydedilmiş beyinleri (model ve scaler) belleğe yüklüyoruz.
         self.model = joblib.load(os.path.join(model_dir, 'best_model.pkl'))
         self.scaler = joblib.load(os.path.join(model_dir, 'scaler.pkl'))
 
-        # Model eğitilirken kullanılan sütun sıralamasını listeye alıyoruz.
         with open(os.path.join(model_dir, 'columns.json'), 'r') as f:
             self.model_columns = json.load(f)
-    
+
     def prepare_data(self, input_data):
-        # Gelen sözlüğü (dict) Pandas'ın anlayacağı tek satırlık bir tabloya çevirir.
         df = pd.DataFrame([input_data])
 
-        # Feature Engineering: Melisa'nın yaptığı yeni özellik türetme işlemi.
-        # Eğer müşteri 6 aydan az süredir bizdeyse 'yeni' kabul ediyoruz.
+        # Churn sütunu varsa sil — model bunu görmemeli
+        # Churn sütunu varsa sil — bu hedef değişken, girdi değil
+        for churn_col in ['Churn', 'Churn_Yes', 'Churn_No']:
+            if churn_col in df.columns:
+                df = df.drop(columns=[churn_col])
+
+        # ── İKİLİ DÖNÜŞÜM — Yes/No → 1/0, Male/Female → 1/0
+        ikili_sutunlar = ['gender', 'Partner', 'Dependents',
+                          'PhoneService', 'PaperlessBilling']
+        for sutun in ikili_sutunlar:
+            if sutun in df.columns:
+                df[sutun] = df[sutun].map({'Yes': 1, 'No': 0,
+                                           'Male': 1, 'Female': 0})
+
+        # ── TotalCharges sayıya çevir
+        df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
+        df['TotalCharges'] = df['TotalCharges'].fillna(df['TotalCharges'].median())
+
+        # ── ÖZELLİK MÜHENDİSLİĞİ
+        # Yeni müşteri mi?
         if 'tenure' in df.columns:
             df['IsNewCustomer'] = (df['tenure'] <= 6).astype(int)
-        
-        # One-Hot Encoding: Metinleri (Cinsiyet, Sözleşme vb.) 0 ve 1'lere çevirir.
-        df_encoded = pd.get_dummies(df)
 
-        # KRİTİK NOKTA: reindex.
-        # Elimizde sadece 5-10 sütun var ama model 44 tane bekliyor.
-        # Bu satır, eksik olan tüm sütunları oluşturur ve içlerine 0 yazar.
-        # Böylece modelin beklediği kolon sırası asla bozulmaz.
-        df_final = df_encoded.reindex(columns=self.model_columns, fill_value=0)
-        
+        # Aylık ortalama ücret
+        if 'TotalCharges' in df.columns and 'tenure' in df.columns:
+            df['ChargesPerMonth'] = df['TotalCharges'] / (df['tenure'] + 1)
+
+        # ── ONE-HOT ENCODING
+        ohe_sutunlar = [
+            'MultipleLines', 'InternetService', 'OnlineSecurity',
+            'OnlineBackup', 'DeviceProtection', 'TechSupport',
+            'StreamingTV', 'StreamingMovies', 'Contract', 'PaymentMethod'
+        ]
+        mevcut_ohe = [s for s in ohe_sutunlar if s in df.columns]
+        df = pd.get_dummies(df, columns=mevcut_ohe)
+
+        # ── AddOnServices — one-hot encoding sonrası hesaplanmalı
+        ek_hizmetler = [
+            'OnlineSecurity_Yes', 'OnlineBackup_Yes',
+            'DeviceProtection_Yes', 'TechSupport_Yes',
+            'StreamingTV_Yes', 'StreamingMovies_Yes'
+        ]
+        df['AddOnServices'] = sum(
+            df[s].astype(int) if s in df.columns else 0
+            for s in ek_hizmetler
+        )
+
+        # ── Modelin beklediği sütun sıralamasına getir
+        df_final = df.reindex(columns=self.model_columns, fill_value=0)
         return df_final
-    
+
     def predict(self, raw_data):
-        # 1. Ham veriyi yukarıdaki metoda gönderip 44 sütunlu hale getir.
         prepared_df = self.prepare_data(raw_data)
-        
-        # 2. Ölçeklendirme: Sayıları (MonthlyCharges gibi) scaler ile 0-1 arasına çek.
-        # Scaler eğitilirken hangi oranları kullandıysa, bu yeni veriye de aynısını yapar.
         scaled_data = self.scaler.transform(prepared_df)
-        
-        # 3. Tahmin: 'predict' bize 0 veya 1 döner.
         prediction = self.model.predict(scaled_data)[0]
-        
-        # 4. Olasılık: 'predict_proba' bize [kalma_olasılığı, gitme_olasılığı] döner.
-        # Biz gitme (Churn) tarafını, yani 1. indeksi alıyoruz.
         probability = self.model.predict_proba(scaled_data)[0][1]
-        
+
         return {
             "churn_prediction": "Yes" if prediction == 1 else "No",
-            "churn_probability": round(float(probability) * 100) # İki basamaktan fazlasını yüzdelik olarak almak istemedim.
+            "churn_probability": round(float(probability) * 100)
         }

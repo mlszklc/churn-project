@@ -8,3 +8,4 @@ lightgbm
 joblib
 streamlit
 requests
+python-multipart
