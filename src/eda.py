@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 # ── VERİYİ OKUYOR (Kaggle'dan indirdiğin gerçek CSV)
-df = pd.read_csv('data/WA_Fn-UseC_-Telco-Customer-Churn.csv')
+df = pd.read_csv('data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv')
 
 # ── ADIM 1: VERİYE İLK BAKIŞ
 # Kaç satır, kaç sütun var?

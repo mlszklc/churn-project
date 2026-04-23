@@ -2,7 +2,7 @@ import pandas as pd #veriyi tablo olarak okumak, düzenlemek için
 import os # Klasör oluşturmak için
 
 # Veriyi oku
-df = pd.read_csv('data/WA_Fn-UseC_-Telco-Customer-Churn.csv')
+df = pd.read_csv('data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv')
 
 # customerID modelde işimize yaramıyor, sil
 df = df.drop(columns=['customerID'])
