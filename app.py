@@ -9,7 +9,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 from predict import PredictionService
 
-app = FastAPI(title="Churn Prediction API", version="3.0.0")
+app = FastAPI(title="Churn Prediction API", version="3.1.0")
 service = PredictionService()
 
 def get_risk_level(prob: float) -> str:
@@ -24,6 +24,9 @@ class SingleCustomerInput(BaseModel):
     tenure: int
     MonthlyCharges: float
     SeniorCitizen: int
+    Partner: str
+    OnlineSecurity: str
+    TechSupport: str
     contract: str
     internet_service: str
     payment_method: str
@@ -40,20 +43,19 @@ def health():
 @app.post("/predict/single")
 def predict_single(customer: SingleCustomerInput):
     try:
-        # Ham string veri olarak gonder, prepare_data encode eder
         data = {
             "gender": "Male",
             "SeniorCitizen": customer.SeniorCitizen,
-            "Partner": "No",
+            "Partner": customer.Partner,
             "Dependents": "No",
             "tenure": customer.tenure,
             "PhoneService": "Yes",
             "MultipleLines": "No",
             "InternetService": customer.internet_service,
-            "OnlineSecurity": "No",
+            "OnlineSecurity": customer.OnlineSecurity,
             "OnlineBackup": "No",
             "DeviceProtection": "No",
-            "TechSupport": "No",
+            "TechSupport": customer.TechSupport,
             "StreamingTV": "No",
             "StreamingMovies": "No",
             "Contract": customer.contract,
@@ -82,6 +84,8 @@ async def predict_batch(file: UploadFile = File(...)):
     try:
         contents = await file.read()
         df = pd.read_csv(io.BytesIO(contents))
+        if 'Churn' in df.columns:
+            df = df.drop(columns=['Churn'])
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"CSV okunamadi: {str(e)}")
 
@@ -117,6 +121,8 @@ async def predict_batch_summary(file: UploadFile = File(...)):
     try:
         contents = await file.read()
         df = pd.read_csv(io.BytesIO(contents))
+        if 'Churn' in df.columns:
+            df = df.drop(columns=['Churn'])
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"CSV okunamadi: {str(e)}")
 
