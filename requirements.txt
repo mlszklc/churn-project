@@ -9,3 +9,4 @@ joblib
 streamlit
 requests
 python-multipart
+matplotlib
