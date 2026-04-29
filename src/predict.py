@@ -65,6 +65,7 @@ class PredictionService:
         )
 
         # ── Modelin beklediği sütun sıralamasına getir
+        df = df.fillna(0)
         df_final = df.reindex(columns=self.model_columns, fill_value=0)
         return df_final
 
