@@ -114,7 +114,7 @@ with tab2:
                     response = requests.post(
                         SUMMARY_URL,
                         files={"file": (uploaded_file.name, file_bytes, "text/csv")},
-                        timeout=120
+                        timeout=300
                     )
                 except requests.exceptions.ConnectionError:
                     st.error("Couldn't connect API. Please run 'uvicorn app:app --reload' in your terminal.")
